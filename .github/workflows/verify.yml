@@ -21,7 +21,15 @@ jobs:
       - run: make deps
       - run: make verify
       - run: make browser-deps
+      - name: Use the official Ubuntu HTTPS mirror for browser dependencies
+        run: |
+          for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list; do
+            if [ -f "$source" ]; then
+              sudo sed -i 's|http://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+            fi
+          done
       - run: .tools/browser/node_modules/.bin/playwright install --with-deps chromium webkit
+        timeout-minutes: 15
       - run: node tests/browser/smoke.mjs
       - run: node tests/browser/terminal-lifecycle.mjs --binary=.state/qa/fixture-server
       - run: node tests/browser/sw-migration.mjs
