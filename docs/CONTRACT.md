@@ -1,0 +1,7 @@
+# HTTP API contract
+
+All endpoints are under `/api/v1`. `GET /auth/status` returns `configured`, `authenticated`, `setup_available`, and `setup_browser_enabled`; an authenticated status also returns `username` and a CSRF token. `setup_browser_enabled` means Cloudflare Access enrollment parameters were configured, while `setup_available` additionally requires a valid owner Access identity and an unconfigured account. Neither field grants enrollment authority.
+
+`POST /auth/setup/begin` and `/auth/setup/complete` work only before an account exists and after verified Cloudflare Access identity, exact origin, rate limiting, a CSRF-bound completion request, and TOTP confirmation. `POST /auth/login` accepts username, password, and TOTP or a recovery code. Mutating authenticated requests require the session cookie, exact `Origin`, and `X-CSRF-Token`. The opaque session cookie is HttpOnly, SameSite=Strict, Secure on HTTPS, and expires at an absolute seven days. Logout revokes it. Private API routes return authorization errors to anonymous clients.
+
+The backend exposes sessions/Spaces, terminal observation and control, tasks, notes, preferences, and optional GitHub issues. Browser code in `web/src/lib/api.ts` is the maintained request interface; endpoint behavior is covered by Go and web tests. Terminal observation does not acquire control. Session ownership and capabilities are rechecked before sending input.

@@ -1,0 +1,8 @@
+[Unit]
+Description=HERDR Space SQLite backup
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/lib/herdr-space/herdr-space backup --data-dir %h/.local/share/herdr-space --retain 7
+UMask=0077
+NoNewPrivileges=yes

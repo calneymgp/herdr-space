@@ -1,0 +1,71 @@
+import {cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
+import {afterEach,describe,expect,it,vi} from 'vitest'
+import {SetupView} from './SetupView'
+import {api,ApiError} from '../lib/api'
+vi.mock('qrcode',()=>({default:{toCanvas:vi.fn().mockResolvedValue(undefined)}}))
+afterEach(()=>{cleanup();vi.restoreAllMocks()})
+const begin=()=>{fireEvent.change(screen.getByRole('textbox',{name:'Username'}),{target:{value:'owner'}});fireEvent.change(screen.getByLabelText('Password'),{target:{value:'long safe password 123'}});fireEvent.change(screen.getByLabelText('Confirm password'),{target:{value:'long safe password 123'}});fireEvent.click(screen.getByRole('button',{name:'Continue'}))}
+describe('first-run enrollment',()=>{
+ it('guides standalone setup without Cloudflare actions',()=>{
+  render(<SetupView available={false} onReady={()=>{}}/>)
+  expect(screen.getByRole('heading',{name:'Set up the owner account'})).toBeTruthy()
+  expect(screen.getByRole('button',{name:'Refresh'})).toBeTruthy()
+  expect(screen.queryByText('Switch Cloudflare Access session')).toBeNull()
+ })
+ it('retains access verification for browser enrollment',()=>{
+  render(<SetupView available={false} browserEnabled onReady={()=>{}} onCheckAccess={async()=> 'denied'}/>)
+  expect(screen.getByRole('button',{name:'Check access'})).toBeTruthy()
+  expect(screen.getByText('Switch Cloudflare Access session')).toBeTruthy()
+ })
+ it('rejects a 12-character password before sending setup begin',()=>{
+  const call=vi.spyOn(api,'setupBegin')
+  render(<SetupView available onReady={()=>{}}/>)
+  fireEvent.change(screen.getByRole('textbox',{name:'Username'}),{target:{value:'owner'}})
+  fireEvent.change(screen.getByLabelText('Password'),{target:{value:'twelveChars!'}})
+  fireEvent.change(screen.getByLabelText('Confirm password'),{target:{value:'twelveChars!'}})
+  fireEvent.click(screen.getByRole('button',{name:'Continue'}))
+  expect(screen.getByRole('alert').textContent).toContain('16')
+  expect(call).not.toHaveBeenCalled()
+ })
+ it('keeps the pending secret for a retry after invalid OTP',async()=>{
+  vi.spyOn(api,'setupBegin').mockResolvedValue({secret:'TOPSECRET',otpauth_url:'otpauth://totp/HERDR?secret=TOPSECRET',csrf_token:'pending-csrf'})
+  vi.spyOn(api,'setupComplete').mockRejectedValue(new ApiError('Invalid code',400))
+  render(<SetupView available onReady={()=>{}}/>)
+  begin()
+  await screen.findByText('TOPSECRET')
+  fireEvent.change(screen.getByRole('textbox',{name:'Six-digit code'}),{target:{value:'000000'}})
+  fireEvent.click(screen.getByRole('button',{name:'Verify code'}))
+  await waitFor(()=>expect(screen.getByRole('alert').textContent).toMatch(/code/i))
+  expect(screen.getByRole('heading',{name:'Set up authentication'})).toBeTruthy()
+  expect(screen.getByText('TOPSECRET')).toBeTruthy()
+ })
+ it('clears an expired pending secret and restarts enrollment',async()=>{
+  vi.spyOn(api,'setupBegin').mockResolvedValue({secret:'TOPSECRET',otpauth_url:'otpauth://totp/HERDR?secret=TOPSECRET',csrf_token:'pending-csrf'})
+  vi.spyOn(api,'setupComplete').mockRejectedValue(new ApiError('Expired',410))
+  render(<SetupView available onReady={()=>{}}/>)
+  begin()
+  await screen.findByText('TOPSECRET')
+  fireEvent.change(screen.getByRole('textbox',{name:'Six-digit code'}),{target:{value:'000000'}})
+  fireEvent.click(screen.getByRole('button',{name:'Verify code'}))
+  await waitFor(()=>expect(screen.getByRole('heading',{name:'Set up your Space'})).toBeTruthy())
+  expect(screen.queryByText('TOPSECRET')).toBeNull()
+ })
+ it('shows recovery codes once and requires acknowledgement before login',async()=>{
+  vi.spyOn(api,'setupBegin').mockResolvedValue({secret:'TOPSECRET',otpauth_url:'otpauth://totp/HERDR?secret=TOPSECRET',csrf_token:'pending-csrf'})
+  const complete=vi.spyOn(api,'setupComplete').mockResolvedValue({username:'owner',recovery_codes:['rec-one','rec-two'],configured:true})
+  const ready=vi.fn()
+  render(<SetupView available onReady={ready}/>)
+  begin()
+  await screen.findByText('TOPSECRET')
+  fireEvent.change(screen.getByRole('textbox',{name:'Six-digit code'}),{target:{value:'123456'}})
+  fireEvent.click(screen.getByRole('button',{name:'Verify code'}))
+  await screen.findByText('rec-one')
+  expect(complete).toHaveBeenCalledWith('123456','pending-csrf')
+  const finish=screen.getByRole('button',{name:'Go to sign in'}) as HTMLButtonElement
+  expect(finish.disabled).toBe(true)
+  fireEvent.click(screen.getByRole('checkbox',{name:'I saved the recovery codes'}))
+  fireEvent.click(finish)
+  expect(ready).toHaveBeenCalledOnce()
+  expect(screen.queryByText('rec-one')).toBeNull()
+ })
+})

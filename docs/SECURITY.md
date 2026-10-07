@@ -1,0 +1,5 @@
+# Security model
+
+First-owner enrollment is fail closed. The default path is `herdr-space auth setup` on a local interactive terminal. Browser enrollment is disabled unless issuer, audience, and exact owner email are configured for Cloudflare Access. The server verifies the Access token before starting or completing enrollment, and creates the owner only after the TOTP challenge. Setup closes once an account exists.
+
+Sign-in requires a password and a fresh TOTP or one-time recovery code. Sessions have an absolute seven-day limit; activity does not extend it. The browser receives an HttpOnly, SameSite=Strict cookie, with Secure enabled except for explicitly allowed loopback HTTP development. Mutations require matching `Origin` and CSRF token. The server rejects non-HTTPS origins unless `--allow-insecure-local` is used with loopback origin and listener. Terminal control checks current authority and remains distinct from read-only observation. Sensitive material must stay outside repository files and public test artifacts.

@@ -1,0 +1,16 @@
+[Unit]
+Description=HERDR Space
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/herdr-space/server.env
+ExecStart=%h/.local/lib/herdr-space/herdr-space serve --listen 127.0.0.1:9380 --origin ${HERDR_SPACE_ORIGIN} --data-dir %h/.local/share/herdr-space
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+TimeoutStopSec=20
+
+[Install]
+WantedBy=default.target
